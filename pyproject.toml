@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "vatify"
-version = "0.1.4"
+version = "0.1.5"
 description = "Official Python SDK for Vatify — EU VAT validation, rates, and calculation."
 readme = "README.md"
 requires-python = ">=3.9"
