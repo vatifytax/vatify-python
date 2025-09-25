@@ -2,9 +2,10 @@
 requires = ["hatchling>=1.18"]
 build-backend = "hatchling.build"
 
+
 [project]
 name = "vatify"
-version = "0.1.0"
+version = "0.1.4"
 description = "Official Python SDK for Vatify — EU VAT validation, rates, and calculation."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -31,8 +32,13 @@ Documentation = "https://vatifytax.app"
 Repository = "https://github.com/vatifytax/vatify-python"
 Issues = "https://github.com/vatifytax/vatify-python/issues"
 
+
+
 [project.scripts]
 vatify = "vatify.cli:main"
 
-[tool.hatch.build]
+[tool.hatch.build.targets.wheel]
 packages = ["src/vatify"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/vatify", "README.md", "LICENSE", "pyproject.toml"]

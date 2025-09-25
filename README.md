@@ -34,14 +34,15 @@ res = client.validate_vat("DE123456789")
 print(res.valid, res.country_code, res.name)
 
 # 2) Calculate VAT rate (by country, type, date)
-calc = client.calculate(country_code="DE", rate_type="standard", supply_date="2025-09-23")
-print(calc.rate_percent)
+res = client.calculate(amount=100, basis="net", rate_type="reduced", supply_date=str(date.today().isoformat()),
+                           supplier={"country_code": "DE", "vat_number": "DE811907980"},
+                           customer={"country_code": "FR", "vat_number": "FR40303265045"},
+                           supply_type="services", b2x="B2B", category_hint="ACCOMMODATION")
+print(res)
 
 # 3) Get rates for a country
 rates = client.rates("DE")
-for r in rates:
-    print(r.rate_type, r.rate_percent)
-
+print(rates)
 client.close()
 ```
 
@@ -63,7 +64,6 @@ asyncio.run(main())
 ```bash
 vatify validate DE123456789
 vatify rates DE
-vatify calculate DE standard 2025-09-23
 ```
 
 ## Error Handling
@@ -87,6 +87,7 @@ pytest -q
 
 ### Build and upload
 ```bash
+pipx run build
 python -m pip install --upgrade build twine
 python -m build
 twine upload dist/*

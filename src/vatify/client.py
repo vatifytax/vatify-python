@@ -1,6 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Optional, Dict, Any, List
+from datetime import date
+from typing import Literal, Optional, Dict, Any, List
 import httpx
 from pydantic import BaseModel, Field
 
@@ -15,24 +16,42 @@ class ValidationResult(BaseModel):
     address: Optional[str] = None
     meta: Dict[str, Any] = Field(default_factory=dict)
 
+class Supplier(BaseModel):
+    country_code: str = Field(..., min_length=2, max_length=2, description="ISO-3166-1 alpha-2")
+    vat_number: Optional[str] = Field(None, description="Für B2B/VIES-Check")
+
+
 class CalculationRequest(BaseModel):
-    country_code: str
-    rate_type: str  # e.g. "standard" | "reduced"
-    supply_date: str  # ISO date "YYYY-MM-DD"
+    amount: float = Field(..., gt=0, description="Eingabebetrag (net oder gross)")
+    basis: Literal["net", "gross"] = "net"
+    rate_type: Literal["standard", "reduced", "super_reduced", "parking", "zero"] = "standard"
+    supply_date: str
+    supplier: Supplier
+    customer: Supplier
+    supply_type: Literal["goods", "services"] = "goods"
+    b2x: Literal["B2C", "B2B"] = "B2C"
+    category_hint: Optional[str] = Field(None, description="z.B. ebooks, hospitality, food")
+
+
 
 class CalculationResult(BaseModel):
     country_code: str
-    rate_type: str
-    rate_percent: float
-    supply_date: str
-    meta: Dict[str, Any] = Field(default_factory=dict)
+    applied_rate: float
+    net: float
+    vat: float
+    gross: float
+    mechanism: Optional[str] = None
+    messages: List[str] 
+    vat_check_status: str
 
 class Rate(BaseModel):
-    country_code: str
-    rate_type: str
-    rate_percent: float
-    valid_from: Optional[str] = None
-    valid_to: Optional[str] = None
+    rate: float
+    label: str
+
+class Rates(BaseModel):
+    country: str
+    standard_rate: str
+    reduced_rates: List[Rate]
 
 # ---------- Errors ----------
 class VatifyError(Exception):
@@ -78,9 +97,9 @@ class Vatify:
             raise VatifyError(f"Network error: {e}") from e
 
     # POST /v1/calculate  body {"country_code":"...","rate_type":"...","supply_date":"..."}
-    def calculate(self, *, country_code: str, rate_type: str, supply_date: str) -> CalculationResult:
+    def calculate(self, *, amount: float, basis: str, rate_type: str, supply_date: str, supplier: Supplier, customer: Supplier, supply_type: str, b2x: str, category_hint: Optional[str] = None) -> CalculationResult:
         c = self._ensure_client()
-        payload = CalculationRequest(country_code=country_code, rate_type=rate_type, supply_date=supply_date).model_dump()
+        payload = CalculationRequest(amount=amount, basis=basis, rate_type=rate_type, supply_date=supply_date, supplier=supplier, customer=customer, supply_type=supply_type, b2x=b2x, category_hint=category_hint).model_dump()
         try:
             resp = c.post("/v1/calculate", json=payload)
             if resp.status_code >= 400:
@@ -90,7 +109,7 @@ class Vatify:
             raise VatifyError(f"Network error: {e}") from e
 
     # GET /v1/rates/{country_code}
-    def rates(self, country_code: str) -> List[Rate]:
+    def rates(self, country_code: str) -> Rate:
         c = self._ensure_client()
         try:
             resp = c.get(f"/v1/rates/{country_code}")
@@ -99,7 +118,11 @@ class Vatify:
             data = resp.json()
             # Accept either {"rates":[...]} or a raw list
             items = data["rates"] if isinstance(data, dict) and "rates" in data else data
-            return [Rate(**r) for r in items]
+            rates = Rates(country=items.get("country", country_code), standard_rate="", reduced_rates=[])
+            rates.country = items["country"]
+            rates.standard_rate = items["standard_rate"] 
+            rates.reduced_rates = [Rate(**r) for r in items["reduced_rates"]]
+            return rates
         except httpx.HTTPError as e:
             raise VatifyError(f"Network error: {e}") from e
 
@@ -136,9 +159,9 @@ class VatifyAsync:
         except httpx.HTTPError as e:
             raise VatifyError(f"Network error: {e}") from e
 
-    async def calculate(self, *, country_code: str, rate_type: str, supply_date: str) -> CalculationResult:
+    async def calculate(self, *, amount: float, basis: str, rate_type: str, supply_date: str, supplier: Supplier, customer: Supplier, supply_type: str, b2x: str, category_hint: Optional[str] = None) -> CalculationResult:
         c = self._ensure_client()
-        payload = CalculationRequest(country_code=country_code, rate_type=rate_type, supply_date=supply_date).model_dump()
+        payload = CalculationRequest(amount=amount, basis=basis, rate_type=rate_type, supply_date=supply_date, supplier=supplier, customer=customer, supply_type=supply_type, b2x=b2x, category_hint=category_hint).model_dump()
         try:
             resp = await c.post("/v1/calculate", json=payload)
             if resp.status_code >= 400:
